@@ -29,7 +29,15 @@ Para cada funcionário: **Authentication** > **Users** > **Add user** > **Create
 Para trocar a senha de alguém, use o mesmo painel (menu do usuário > Send password recovery ou editar a senha).
 Se a pessoa não tem e-mail, você pode usar um fictício, por exemplo `joao@smo.local`.
 
-## 5. Publicar o site (Netlify)
+## 5. Publicar o site
+
+### Opção A: GitHub Pages
+1. Crie um repositório **Público** e envie o `index.html` na raiz (Add file > Upload files > Commit changes).
+2. Em Settings > Pages: Source = Deploy from a branch, Branch = `main`, pasta `/ (root)`, Save.
+3. Espere 1 a 2 minutos e abra `https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/` (teste também `/index.html` no final).
+4. Se der 404 persistente, use a opção B.
+
+### Opção B: Netlify (mais simples)
 1. Entre em app.netlify.com/drop (o endereço permite arrastar arquivos).
 2. Arraste a **pasta** que contém o `index.html` já editado.
 3. O Netlify gera um link. Envie esse link aos funcionários. No celular, pode usar **Adicionar à tela inicial**.
