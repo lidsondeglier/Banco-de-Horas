@@ -68,8 +68,13 @@ function calc(f){if(!f.ini||!f.fim||tm(f.ini)===tm(f.fim))return null;let t=tm(f
 
 const norm=v=>v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9._-]/g,'');
 const emailDe=v=>{v=v.trim().toLowerCase();return v.includes('@')?v:norm(v)+'@horas.local'};
+const NORMAL=[[420,720],[840,1020]]; // horário normal: 07:00-12:00 e 14:00-17:00
+function extra(f,k){const m=calc(f);if(m===null)return 0;if(k!=='util')return m;
+ const a=tm(f.ini);let b=tm(f.fim);if(b<=a)b+=1440;let sg;
+ if(f.pausa==='com'){let x=tm(f.saida),v=tm(f.volta);if(x<a)x+=1440;if(v<x)v+=1440;sg=[[a,Math.min(x,b)],[Math.min(v,b),b]]}else sg=[[a,b]];
+ let n=0;sg.forEach(([x,y])=>NORMAL.forEach(([p,q])=>n+=Math.max(0,Math.min(y,q)-Math.max(x,p))));return Math.max(0,m-n)}
 const nomeDe=u=>(S.pf.find(p=>p.id===u)||{}).nome||'(sem nome)';
-const recs=()=>S.rows.map(r=>({...r,ini:hm(r.ini),fim:hm(r.fim),saida:hm(r.saida),volta:hm(r.volta),st:r.status,min:r.minutos,nome:nomeDe(r.user_id)})).sort((a,b)=>(b.data+b.ini).localeCompare(a.data+a.ini));
+const recs=()=>S.rows.map(r=>{const o={...r,ini:hm(r.ini),fim:hm(r.fim),saida:hm(r.saida),volta:hm(r.volta),st:r.status,min:r.minutos,nome:nomeDe(r.user_id)};o.ex=extra(o,classify(r.data).k);return o}).sort((a,b)=>(b.data+b.ini).localeCompare(a.data+a.ini));
 const filt=(l,f)=>l.filter(r=>(!f.mes||r.data.startsWith(f.mes))&&(!f.uid||r.user_id===f.uid)&&(!f.st||r.st===f.st));
 const equipe=()=>S.pf.filter(p=>p.role==='funcionario');
 
@@ -97,9 +102,9 @@ function vNovo(){const f=S.form;
  ${f.pausa==='com'?`<div class="g2"><label>Saída p/ almoço<input type="time" data-g name="saida" value="${f.saida}"></label><label>Retorno<input type="time" data-g name="volta" value="${f.volta}"></label></div>`:''}
  <label>Observação (motivo)<textarea data-g name="obs" rows="2">${esc(f.obs)}</textarea></label>
  <div id="sum" class="sum"></div><button class="b1" data-a="enviar">${S.edit?'Reenviar para aprovação':'Enviar'}</button>${S.edit?'<button class="b2" data-a="cancelar">Cancelar</button>':''}</div>`}
-function updSum(){const d=$('#dia'),s=$('#sum');if(!d||!s)return;d.textContent=S.form.data?classify(S.form.data).t:'';const m=calc(S.form);s.textContent=m===null?'Total: —':'Total trabalhado: '+fh(m)}
+function updSum(){const d=$('#dia'),s=$('#sum');if(!d||!s)return;d.textContent=S.form.data?classify(S.form.data).t:'';const m=calc(S.form);const e=extra(S.form,classify(S.form.data).k);s.innerHTML=m===null?'Total: —':'Trabalhado: '+fh(m)+'<br>Horas extras: <span style="color:var(--pr)">'+fh(e)+'</span>'+(e===0?'<div class="mu s" style="font-weight:400">Dentro do horário normal (07–12 e 14–17): não conta como hora extra.</div>':'')}
 function chips(){return `<div class="chips">${[['','Todas'],['pendente','Pendentes'],['aprovado','Aprovadas'],['rejeitado','Rejeitadas'],['correcao','Correção']].map(([k,l])=>`<button class="${S.f.st===k?'sel':''}" data-a="st" data-v="${k}">${l}</button>`).join('')}</div>`}
-function vMeus(){const all=recs(),l=filt(all,{st:S.f.st}),ap=all.filter(r=>r.st==='aprovado').reduce((a,r)=>a+r.min,0);
+function vMeus(){const all=recs(),l=filt(all,{st:S.f.st}),ap=all.filter(r=>r.st==='aprovado').reduce((a,r)=>a+r.ex,0);
  return `<h2>Meus registros</h2><div class="card row"><span class="mu">Horas aprovadas</span><b>${fh(ap)}</b></div>${chips()}${l.map(r=>card(r)).join('')||'<p class="mu">Nenhum registro.</p>'}`}
 function card(r,adm){const c=classify(r.data),mine=r.user_id===S.me.id,B=(v,cl,t)=>`<button class="sm ${cl}" data-a="dec" data-id="${r.id}" data-v="${v}">${t}</button>`;let ac='';
  if(adm&&!mine)ac=r.st==='pendente'?B('aprovado','ok','Aprovar')+B('rejeitado','no','Rejeitar')+B('correcao','wa','Correção'):B('correcao','','Pedir correção');
@@ -108,7 +113,7 @@ function card(r,adm){const c=classify(r.data),mine=r.user_id===S.me.id,B=(v,cl,t
  else ac=`<button class="sm" data-a="pedido" data-id="${r.id}">Solicitar alteração</button>`;
  return `<div class="card"><div class="row"><b>${adm?esc(r.nome):br(r.data)}</b><span class="tag ${r.st}">${L[r.st]}</span></div>
  <div class="mu">${adm?br(r.data)+' · ':''}${esc(c.t)}</div><div>${r.ini}–${r.fim} · ${r.pausa==='com'?`almoço ${r.saida}–${r.volta}`:'sem pausa'}</div>
- <div class="big">${fh(r.min)}</div>${r.obs?`<div class="mu">${esc(r.obs)}</div>`:''}
+ <div class="big">${fh(r.ex)} <span class="mu s">extras</span></div><div class="mu s">Trabalhado: ${fh(r.min)}</div>${r.obs?`<div class="mu">${esc(r.obs)}</div>`:''}
  ${r.pedido?`<div class="note"><b>Pedido de alteração:</b> ${esc(r.pedido)}</div>`:''}${r.nota?`<div class="note">${esc(r.nota)}</div>`:''}
  ${r.decidido_em?`<div class="mu s">${L[r.st]||''} em ${dt(r.decidido_em)} por ${esc(nomeDe(r.decidido_por))}</div>`:''}
  <button class="sm" data-a="hist" data-id="${r.id}">Histórico</button>${ac}</div>`}
@@ -116,8 +121,8 @@ function card(r,adm){const c=classify(r.data),mine=r.user_id===S.me.id,B=(v,cl,t
 function fbar(){return `<div class="g2"><input type="month" data-f="mes" value="${S.f.mes}"><select data-f="uid"><option value="">Todos os funcionários</option>${equipe().map(p=>`<option value="${p.id}" ${S.f.uid===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div><div style="height:10px"></div>`}
 function vPainel(){const all=recs(),f=filt(all,{mes:S.f.mes,uid:S.f.uid}),ap=f.filter(r=>r.st==='aprovado'),us=equipe().filter(p=>!S.f.uid||p.id===S.f.uid);
  const hist=all.filter(r=>r.decidido_em).sort((a,b)=>b.decidido_em.localeCompare(a.decidido_em)).slice(0,8);
- return `<h2>Painel</h2>${fbar()}<div class="kpi"><div class="card"><b>${equipe().filter(p=>p.ativo).length}</b><span class="mu s">Funcionários</span></div><div class="card"><b>${all.filter(r=>r.st==='pendente').length}</b><span class="mu s">Pendentes</span></div><div class="card"><b>${fh(ap.reduce((a,r)=>a+r.min,0))}</b><span class="mu s">Aprovadas</span></div></div>
- <div class="card x"><b>Horas por funcionário</b><table><tr><th>Nome</th><th>Aprovadas</th><th>Pendentes</th></tr>${us.map(p=>{const x=f.filter(r=>r.user_id===p.id),s=k=>fh(x.filter(r=>r.st===k).reduce((a,r)=>a+r.min,0));return `<tr><td>${esc(p.nome)}</td><td>${s('aprovado')}</td><td>${s('pendente')}</td></tr>`}).join('')||'<tr><td class="mu">Nenhum funcionário.</td></tr>'}</table></div>
+ return `<h2>Painel</h2>${fbar()}<div class="kpi"><div class="card"><b>${equipe().filter(p=>p.ativo).length}</b><span class="mu s">Funcionários</span></div><div class="card"><b>${all.filter(r=>r.st==='pendente').length}</b><span class="mu s">Pendentes</span></div><div class="card"><b>${fh(ap.reduce((a,r)=>a+r.ex,0))}</b><span class="mu s">Aprovadas</span></div></div>
+ <div class="card x"><b>Horas por funcionário</b><table><tr><th>Nome</th><th>Aprovadas</th><th>Pendentes</th></tr>${us.map(p=>{const x=f.filter(r=>r.user_id===p.id),s=k=>fh(x.filter(r=>r.st===k).reduce((a,r)=>a+r.ex,0));return `<tr><td>${esc(p.nome)}</td><td>${s('aprovado')}</td><td>${s('pendente')}</td></tr>`}).join('')||'<tr><td class="mu">Nenhum funcionário.</td></tr>'}</table></div>
  <div class="card"><b>Últimas decisões</b>${hist.map(r=>`<div class="s" style="margin-top:8px">${esc(r.nome)} · ${br(r.data)} · <b>${L[r.st]}</b><div class="mu">${dt(r.decidido_em)} · ${esc(nomeDe(r.decidido_por))}</div></div>`).join('')||'<div class="mu">Sem decisões.</div>'}</div>`}
 function vPend(){const l=recs().filter(r=>r.st==='pendente');return `<h2>Pendentes (${l.length})</h2>${l.map(r=>card(r,1)).join('')||'<p class="mu">Nada pendente.</p>'}`}
 function vRegs(){const l=filt(recs(),S.f);return `<h2>Registros</h2>${fbar()}${chips()}<button class="b2" style="margin:0 0 12px" data-a="csv">Exportar para Excel (CSV)</button>${l.map(r=>card(r,1)).join('')||'<p class="mu">Nenhum registro.</p>'}`}
@@ -139,8 +144,8 @@ async function enviar(){const f=S.form,m=calc(f);if(!f.data||m===null){toast('Co
 async function decidir(id,st){const r=recs().find(x=>x.id===id);if(!r)return;if(r.user_id===S.me.id){toast('Você não pode decidir as próprias horas.');return}
  let nota='';if(st!=='aprovado'){nota=await ask(st==='rejeitado'?'Rejeitar horas':'Solicitar correção','Motivo / o que corrigir',true);if(nota===null)return}
  chk(await sb.from('overtime').update({status:st,nota}).eq('id',id));await load();toast('Registrado')}
-function csv(){const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const rows=[['Funcionário','Data','Classificação','Entrada','Saída','Almoço saída','Almoço retorno','Horas (h:mm)','Horas decimais','Situação','Observação']];
- filt(recs(),S.f).forEach(r=>rows.push([r.nome,br(r.data),classify(r.data).t,r.ini,r.fim,r.saida,r.volta,fh(r.min).replace('h',':'),(r.min/60).toFixed(2).replace('.',','),L[r.st],r.obs]));
+function csv(){const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const rows=[['Funcionário','Data','Classificação','Entrada','Saída','Almoço saída','Almoço retorno','Trabalhado (h:mm)','Horas extras (h:mm)','Horas extras decimais','Situação','Observação']];
+ filt(recs(),S.f).forEach(r=>rows.push([r.nome,br(r.data),classify(r.data).t,r.ini,r.fim,r.saida,r.volta,fh(r.min).replace('h',':'),fh(r.ex).replace('h',':'),(r.ex/60).toFixed(2).replace('.',','),L[r.st],r.obs]));
  return '\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')}
 
 document.addEventListener('click',async e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,id=t.dataset.id;
