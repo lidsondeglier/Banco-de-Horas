@@ -66,6 +66,8 @@ function classify(d){if(!d)return{k:'',t:'',n:''};const x=S.fer.find(h=>h.data==
 function calc(f){if(!f.ini||!f.fim||tm(f.ini)===tm(f.fim))return null;let t=tm(f.fim)-tm(f.ini);if(t<0)t+=1440;
  if(f.pausa==='com'){if(!f.saida||!f.volta)return null;let p=tm(f.volta)-tm(f.saida);if(p<0)p+=1440;t-=p}else if(f.pausa!=='sem')return null;return t>0?t:null}
 
+const norm=v=>v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9._-]/g,'');
+const emailDe=v=>{v=v.trim().toLowerCase();return v.includes('@')?v:norm(v)+'@horas.local'};
 const nomeDe=u=>(S.pf.find(p=>p.id===u)||{}).nome||'(sem nome)';
 const recs=()=>S.rows.map(r=>({...r,ini:hm(r.ini),fim:hm(r.fim),saida:hm(r.saida),volta:hm(r.volta),st:r.status,min:r.minutos,nome:nomeDe(r.user_id)})).sort((a,b)=>(b.data+b.ini).localeCompare(a.data+a.ini));
 const filt=(l,f)=>l.filter(r=>(!f.mes||r.data.startsWith(f.mes))&&(!f.uid||r.user_id===f.uid)&&(!f.st||r.st===f.st));
@@ -78,7 +80,7 @@ async function boot(u){const{data:p}=await sb.from('profiles').select('*').eq('i
  if(!p||!p.ativo){await sb.auth.signOut();login('Acesso não autorizado. Fale com o administrador.');return}
  S.me=p;S.admin=p.role==='admin';S.tab=S.admin?'painel':'novo';await load();
  sb.channel('rt').on('postgres_changes',{event:'*',schema:'public'},()=>{clearTimeout(S.t);S.t=setTimeout(load,300)}).subscribe()}
-function login(msg){$('#h').innerHTML='';$('#n').innerHTML='';$('#m').innerHTML=`<h2>Horas Extras</h2><div class="card"><label>E-mail<input id="em" type="email" autocomplete="username"></label><label>Senha<input id="pw" type="password" autocomplete="current-password"></label>${msg?`<p class="no">${esc(msg)}</p>`:''}<button class="b1" data-a="entrar">Entrar</button><p class="mu s">Esqueceu a senha? Peça ao administrador.</p></div>`}
+function login(msg){$('#h').innerHTML='';$('#n').innerHTML='';$('#m').innerHTML=`<h2>Horas Extras</h2><div class="card"><label>Usuário<input id="em" autocomplete="username" autocapitalize="none" autocorrect="off"></label><label>Senha<input id="pw" type="password" autocomplete="current-password"></label>${msg?`<p class="no">${esc(msg)}</p>`:''}<button class="b1" data-a="entrar">Entrar</button><p class="mu s">Esqueceu a senha? Peça ao administrador.</p></div>`}
 
 const TABS_A=[['painel','Painel'],['pend','Pendentes'],['regs','Registros'],['equipe','Equipe'],['fer','Feriados']],TABS_F=[['novo','Registrar'],['meus','Meus registros']];
 function draw(force){if(!S.me)return;const m=$('#m'),a=document.activeElement;
@@ -119,7 +121,7 @@ function vPainel(){const all=recs(),f=filt(all,{mes:S.f.mes,uid:S.f.uid}),ap=f.f
  <div class="card"><b>Últimas decisões</b>${hist.map(r=>`<div class="s" style="margin-top:8px">${esc(r.nome)} · ${br(r.data)} · <b>${L[r.st]}</b><div class="mu">${dt(r.decidido_em)} · ${esc(nomeDe(r.decidido_por))}</div></div>`).join('')||'<div class="mu">Sem decisões.</div>'}</div>`}
 function vPend(){const l=recs().filter(r=>r.st==='pendente');return `<h2>Pendentes (${l.length})</h2>${l.map(r=>card(r,1)).join('')||'<p class="mu">Nada pendente.</p>'}`}
 function vRegs(){const l=filt(recs(),S.f);return `<h2>Registros</h2>${fbar()}${chips()}<button class="b2" style="margin:0 0 12px" data-a="csv">Exportar para Excel (CSV)</button>${l.map(r=>card(r,1)).join('')||'<p class="mu">Nenhum registro.</p>'}`}
-function vEquipe(){return `<h2>Equipe</h2><p class="mu s">Para cadastrar um funcionário, crie o usuário no painel do Supabase (veja o LEIA-ME). Ele aparece aqui automaticamente.</p>${equipe().map(p=>`<div class="card"><div class="row"><b>${esc(p.nome)}</b><span class="tag ${p.ativo?'aprovado':'rejeitado'}">${p.ativo?'Ativo':'Desativado'}</span></div><button class="sm" data-a="nomeedit" data-id="${p.id}">Editar nome</button><button class="sm ${p.ativo?'no':'ok'}" data-a="tog" data-id="${p.id}">${p.ativo?'Desativar':'Ativar'}</button></div>`).join('')||'<p class="mu">Nenhum funcionário ainda.</p>'}`}
+function vEquipe(){return `<h2>Equipe</h2><div class="card"><b>Novo funcionário</b><label>Nome completo<input id="nn"></label><label>Usuário (sem espaços)<input id="nu" autocapitalize="none"></label><label>Senha (mínimo 6 caracteres)<input id="np"></label><button class="b1" data-a="novo">Criar funcionário</button></div>${equipe().map(p=>`<div class="card"><div class="row"><b>${esc(p.nome)}</b><span class="tag ${p.ativo?'aprovado':'rejeitado'}">${p.ativo?'Ativo':'Desativado'}</span></div>${p.usuario?`<div class="mu s">Usuário: ${esc(p.usuario)}</div>`:''}<button class="sm" data-a="nomeedit" data-id="${p.id}">Editar nome</button><button class="sm" data-a="senhanova" data-id="${p.id}">Nova senha</button><button class="sm ${p.ativo?'no':'ok'}" data-a="tog" data-id="${p.id}">${p.ativo?'Desativar':'Ativar'}</button></div>`).join('')||'<p class="mu">Nenhum funcionário ainda.</p>'}`}
 function vFer(){const l=[...S.fer].sort((a,b)=>a.data.localeCompare(b.data));return `<h2>Feriados</h2><p class="mu s">Os nacionais são automáticos. Cadastre os estaduais, municipais e pontos facultativos.</p>
  <div class="card"><label>Data<input type="date" id="fd"></label><label>Nome<input id="fn"></label><label>Tipo<select id="ft"><option value="estadual">Estadual</option><option value="municipal">Municipal</option><option value="facultativo">Ponto facultativo</option><option value="nacional">Nacional</option></select></label><button class="b1" data-a="addfer">Adicionar</button></div>
  ${l.map(x=>`<div class="card row"><div><b>${br(x.data)}</b> · ${esc(x.nome)}<div class="mu s">${TL[x.tipo]}</div></div><button class="sm no" data-a="delfer" data-id="${x.id}">Remover</button></div>`).join('')}`}
@@ -143,7 +145,7 @@ function csv(){const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const 
 
 document.addEventListener('click',async e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,id=t.dataset.id;
  try{
-  if(a==='entrar'){const r=await sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});if(r.error){login('E-mail ou senha incorretos.');return}await boot(r.data.user)}
+  if(a==='entrar'){const r=await sb.auth.signInWithPassword({email:emailDe($('#em').value),password:$('#pw').value});if(r.error){login('E-mail ou senha incorretos.');return}await boot(r.data.user)}
   else if(a==='sair'){await sb.auth.signOut();S.me=null;login()}
   else if(a==='tab'){S.tab=v;if(v!=='novo')S.edit=null;draw(true)}
   else if(a==='pausa'){S.form.pausa=v;draw(true)}
@@ -155,6 +157,9 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-a]')
   else if(a==='pedido'){const n=await ask('Solicitar alteração ao administrador','Explique o que precisa mudar',true);if(n){chk(await sb.from('overtime').update({pedido:n}).eq('id',id));await load();toast('Pedido enviado')}}
   else if(a==='hist'){const l=chk(await sb.from('overtime_log').select('*').eq('overtime_id',id).order('em'));
    const d=document.createElement('div');d.className='ov';d.innerHTML=`<div class="sh"><b>Histórico</b>${l.map(x=>`<div class="s" style="margin-top:8px"><b>${L[x.acao]||x.acao}</b> · ${dt(x.em)} · ${esc(nomeDe(x.por))}${x.nota?`<div class="mu">${esc(x.nota)}</div>`:''}</div>`).join('')}<button class="b2" id="c">Fechar</button></div>`;document.body.appendChild(d);d.onclick=ev=>{if(ev.target===d||ev.target.id==='c')d.remove()}}
+  else if(a==='novo'){const nome=$('#nn').value.trim(),usuario=norm($('#nu').value),senha=$('#np').value;if(!nome||!usuario||senha.length<6){toast('Preencha nome, usuário e senha (mín. 6).');return}
+   const r=await sb.functions.invoke('criar-usuario',{body:{acao:'criar',nome,usuario,senha}});if(r.error||(r.data&&r.data.erro)){toast((r.data&&r.data.erro)||'Função criar-usuario não encontrada. Veja o LEIA-ME.');return}await load();draw(true);toast('Funcionário criado: '+usuario)}
+  else if(a==='senhanova'){const n=await ask('Nova senha de '+nomeDe(id),'Mínimo 6 caracteres',true);if(n){const r=await sb.functions.invoke('criar-usuario',{body:{acao:'senha',id,senha:n}});toast(r.error||(r.data&&r.data.erro)?((r.data&&r.data.erro)||'Erro'):'Senha alterada')}}
   else if(a==='tog'){const p=S.pf.find(x=>x.id===id);chk(await sb.from('profiles').update({ativo:!p.ativo}).eq('id',id));await load()}
   else if(a==='nomeedit'){const n=await ask('Editar nome','Nome do funcionário',true,nomeDe(id));if(n){chk(await sb.from('profiles').update({nome:n}).eq('id',id));await load()}}
   else if(a==='addfer'){const d=$('#fd').value,n=$('#fn').value.trim();if(!d||!n){toast('Informe data e nome.');return}chk(await sb.from('holidays').upsert({data:d,nome:n,tipo:$('#ft').value},{onConflict:'data'}));await load();draw(true)}
